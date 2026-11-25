@@ -12,11 +12,13 @@ function monthValue(offset = 0) {
 }
 const html = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const empty = message => `<p class="empty">${html(message)}</p>`;
-const icon = name => `<i class="fa-solid fa-${name}" aria-hidden="true"></i>`;
+const icon = name => `<i data-lucide="${name}" aria-hidden="true"></i>`;
+const renderIcons = () => window.lucide?.createIcons();
 const action = (key, id, text, attrs='') => `<button type="button" data-action="${key}" data-id="${Number(id)}" ${attrs}>${text}</button>`;
 let items = [], storages = [], suggestions = [], zone = '', view = 'fridge', mode = 'login';
 let session = new AbortController(), inventoryVersion = 0, bookVersion = 0, statsVersion = 0;
 let saveEditor = null, deleteEditor = null, recommending = false;
+let spendChart = null, spendParts = [];
 
 function toast(message, bad=false) {
   const el = document.createElement('div');
@@ -65,6 +67,8 @@ function authMode(next) {
 }
 function signedOut() {
   session.abort(); session = new AbortController();
+  statsVersion++;
+  clearStatsChart();
   if ($('#dialog').open) $('#dialog').close();
   $('#workspace').hidden = $('#navigation').hidden = $('#account').hidden = true;
   $('#boot').hidden = true; $('#auth').hidden = false;
@@ -110,6 +114,10 @@ handle($('#demo'),'click',() => authenticate(true));
 handle($('#logout'),'click',async () => { await api('/auth/logout','POST'); signedOut(); toast('로그아웃했습니다.'); });
 
 async function navigate(next) {
+  if (view === 'stats' && next !== 'stats') {
+    statsVersion++;
+    clearStatsChart();
+  }
   view = next; $('#title').textContent = titles[next]; document.title = `${titles[next]} · 냉장노트`;
   for (const key of Object.keys(titles)) $('#'+key).hidden = key !== next;
   $$('[data-view]').forEach(b => b.setAttribute('aria-current',b.dataset.view === next ? 'page' : 'false'));
@@ -127,17 +135,16 @@ async function refreshInventory() {
   if (!storages.some(s => String(s.id) === zone)) zone = '';
   renderFridge(); renderChoices();
 }
-function metric(label, value, unit, symbol) {
-  return `<article class="metric">${icon(symbol)}<span>${label}</span><strong>${won.format(value)}<small>${unit}</small></strong></article>`;
-}
 function renderFridge() {
   const active = items.filter(i => i.status === 'ACTIVE');
-  $('#summary').innerHTML = metric('전체 보관중',active.length,'개','box-archive') +
-    metric('임박 · D-3 이내',active.filter(i => i.riskLevel === 'IMMINENT').length,'개','hourglass-half') +
-    metric('소비기한 만료',active.filter(i => i.riskLevel === 'EXPIRED').length,'개','calendar-xmark');
+  const imminent = active.filter(i => i.riskLevel === 'IMMINENT').length;
+  const expired = active.filter(i => i.riskLevel === 'EXPIRED').length;
+  $('#summary').innerHTML = `
+    <li>전체 보관 <strong>${won.format(active.length)}개</strong></li>
+    <li class="near">임박 <strong>${won.format(imminent)}개</strong></li>
+    <li class="past">만료 <strong>${won.format(expired)}개</strong></li>`;
   $('#zones').innerHTML = [{id:'',name:'전체'},...storages].map(s =>
-    `<button data-zone="${html(s.id)}" aria-pressed="${String(s.id) === zone}">${html(s.name)}</button>`).join('') +
-    '<button class="add" data-action="add-zone">+ 구역 추가</button>';
+    `<button type="button" data-zone="${html(s.id)}" aria-pressed="${String(s.id) === zone}">${html(s.name)}</button>`).join('');
   $('#manage-zone').hidden = !zone;
   renderItems();
 }
@@ -149,19 +156,41 @@ function renderItems() {
   $('#item-count').textContent = `${filtered.length}개`;
   $('#items').innerHTML = filtered.map(i => {
     const expired = i.riskLevel === 'EXPIRED', inactive = i.status !== 'ACTIVE';
-    return `<article class="card"><div class="badges"><span class="badge">${html(i.storage.name)}</span>
-      <span class="badge ${html(i.riskLevel)}">${html(i.riskLabel)} · ${html(i.dDayLabel)}</span></div>
-      <h3>${html(i.name)}</h3><dl><dt>처리 상태</dt><dd>${html(labels[i.status])}</dd><dt>구매일</dt><dd>${html(datePart(i.purchasedAt))}</dd>
-      <dt>소비기한</dt><dd>${html(datePart(i.expiresAt))}</dd><dt>가격</dt><dd>${won.format(i.price)}원</dd></dl>
-      ${i.memo ? `<p class="memo muted">${html(i.memo)}</p>` : ''}
-      ${expired && !inactive ? '<small>만료된 식재료는 폐기만 가능합니다.</small>' : ''}
-      <div class="actions">${action('item',i.id,'상세/수정')}${action('consume',i.id,'소비완료', expired || inactive ? 'disabled':'')}
-      ${action('discard',i.id,'폐기',inactive ? 'disabled':'')}${action('delete-item',i.id,'삭제','class="danger"')}</div></article>`;
+    const expiresOn = datePart(i.expiresAt);
+    const consumeAttrs = expired
+      ? 'disabled title="소비기한이 지난 식재료는 폐기만 할 수 있어요."'
+      : (inactive ? 'disabled' : '');
+    return `<article class="card ingredient-card">
+      <div class="ingredient-body">
+        <div class="ingredient-head">
+          <div>
+            <h3>${html(i.name)}</h3>
+            <p class="ingredient-location">${html(i.storage.name)}${inactive ? ' · ' + html(labels[i.status]) : ''}</p>
+          </div>
+          <span class="badge ${html(i.riskLevel)}" title="${html(i.riskLabel)}">${html(i.dDayLabel)}</span>
+        </div>
+        <p class="ingredient-meta"><time datetime="${html(expiresOn)}">${html(expiresOn.replaceAll('-', '.'))}까지</time> · ${won.format(i.price)}원</p>
+        ${i.memo ? `<p class="ingredient-memo">${html(i.memo)}</p>` : ''}
+      </div>
+      <div class="actions">
+        ${action('item',i.id,'수정')}
+        ${action('consume',i.id,'소비완료',consumeAttrs)}
+        ${action('discard',i.id,'폐기',inactive ? 'disabled' : '')}
+        ${action('delete-item',i.id,'삭제','class="danger"')}
+      </div>
+    </article>`;
   }).join('') || empty('표시할 식재료가 없습니다.');
 }
 for (const id of ['keyword','status','risk']) $('#'+id).addEventListener('input',renderItems);
 $('#zones').addEventListener('click',e => {
-  const b = e.target.closest('[data-zone]'); if (b) { zone = b.dataset.zone; renderFridge(); }
+  const b = e.target.closest('[data-zone]');
+  if (!b) return;
+  zone = b.dataset.zone;
+  for (const button of $$('#zones [data-zone]')) {
+    button.setAttribute('aria-pressed', String(button === b));
+  }
+  $('#manage-zone').hidden = !zone;
+  renderItems();
 });
 function renderChoices() {
   const selected = new Set($$('#choices input:checked').map(el => el.value));
@@ -170,7 +199,8 @@ function renderChoices() {
     ${html(i.name)} <span class="badge ${html(i.riskLevel)}">${html(i.riskLabel)} · ${html(i.dDayLabel)}</span></label>`).join('')
     || '<p class="muted">추천에 사용할 수 있는 식재료가 없어요. 소비기한이 지나지 않은 재료를 등록해 주세요.</p>';
   $('#generate').disabled = recommending || usableItems.length === 0;
-  $('#generate').innerHTML = recommending ? '<span class="spinner"></span> 레시피 추천 중…' : icon('wand-magic-sparkles')+' 레시피 추천받기';
+  $('#generate').innerHTML = recommending ? '<span class="spinner"></span> 레시피 추천 중…' : icon('sparkles')+' 레시피 추천받기';
+  renderIcons();
 }
 function youtube(url, title) {
   let href = 'https://www.youtube.com/results?' + new URLSearchParams({search_query:title});
@@ -182,12 +212,12 @@ function youtube(url, title) {
       label = '유튜브 참고 영상';
     }
   } catch { /* 연결된 영상이 없으면 요리 제목으로 검색한다. */ }
-  return `<a class="button" href="${html(href)}" target="_blank" rel="noopener noreferrer">${label} ↗</a>`;
+  return `<a class="button" href="${html(href)}" target="_blank" rel="noopener noreferrer">${label}${icon('arrow-up-right')}</a>`;
 }
 function recipeCard(r, index, saved) {
   const steps = Array.isArray(r.steps) ? r.steps : r.steps.split(/\r?\n/);
   const ingredients = Array.isArray(r.usedIngredients) ? r.usedIngredients.join(', ') : r.usedIngredients;
-  return `<article class="card"><div class="badges"><span class="badge">${icon('clock')} ${html(r.cookingTime)}</span></div><h3>${html(r.title)}</h3>
+  return `<article class="card recipe-card"><h3>${html(r.title)}</h3><span class="badge">${icon('clock')} ${html(r.cookingTime)}</span>
     <p><b>사용 식재료</b><br>${html(ingredients)}</p><ol>${steps.filter(Boolean).map(s => `<li>${html(s)}</li>`).join('')}</ol>
     ${r.memo ? `<p class="memo"><b>개인 메모</b><br>${html(r.memo)}</p>` : ''}
     <div class="actions">${youtube(r.videoUrl,r.title)}${saved ? action('memo',r.id,'메모 수정')+action('delete-recipe',r.id,'삭제','class="danger"') :
@@ -195,6 +225,7 @@ function recipeCard(r, index, saved) {
 }
 function renderSuggestions() {
   $('#suggestions').innerHTML = suggestions.map((r,i) => recipeCard(r,i,false)).join('') || empty('추천 결과가 없습니다.');
+  renderIcons();
 }
 handle($('#generate'),'click',async () => {
   if (recommending) return;
@@ -231,35 +262,216 @@ async function loadBook() {
   const version = ++bookVersion;
   const q = new URLSearchParams({keyword:$('#book-query').value.trim()});
   const recipes = await api('/recipes?'+q);
-  if (version === bookVersion) $('#saved').innerHTML = recipes.map((r,i) => recipeCard(r,i,true)).join('') || empty('표시할 레시피가 없습니다.');
+  if (version !== bookVersion) return;
+  $('#saved').innerHTML = recipes.map((r,i) => recipeCard(r,i,true)).join('') || empty('표시할 레시피가 없습니다.');
+  renderIcons();
 }
 handle($('#book-query'),'input',loadBook);
+const formatWon = amount => `${won.format(amount)}원`;
+const coffeePrice = 4500;
+const coffeeCount = new Intl.NumberFormat('ko-KR', {maximumFractionDigits: 1});
+
+function previousStatsMonth(month) {
+  const date = new Date(`${month}-01T00:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() - 1);
+  return date.toISOString().slice(0, 7);
+}
+
+function statsDelta(amount, previous, field) {
+  if (!previous) return '<span class="stats-delta">지난달 비교 불가</span>';
+  if (previous.totalCount === 0) return '<span class="stats-delta">지난달 기록 없음</span>';
+  const change = amount - previous[field];
+  const sign = change < 0 ? '-' : change > 0 ? '+' : '';
+  const tone = field === 'wastedAmount' && change !== 0 ? (change < 0 ? ' is-better' : ' is-higher') : '';
+  return `<span class="stats-delta${tone}">지난달 대비 ${sign}${formatWon(Math.abs(change))}</span>`;
+}
+
+function statsMetric(label, amount, symbol, comparison = '') {
+  return `<article class="metric">
+    <span class="metric-label">${icon(symbol)}${label}</span>
+    <strong>${won.format(amount)}<small>원</small></strong>
+    ${comparison}
+  </article>`;
+}
+
+function statsInsight(stats) {
+  if (stats.wastedAmount === 0) {
+    return `<p class="stats-insight">${icon('circle-check')}<span><strong>폐기 금액 0원!</strong> 식재료를 알뜰하게 관리했어요.</span></p>`;
+  }
+  const cups = stats.wastedAmount / coffeePrice;
+  const equivalent = cups < 0.1 ? '아메리카노 0.1잔 미만' : `아메리카노 약 ${coffeeCount.format(cups)}잔`;
+  return `<p class="stats-insight">${icon('coffee')}<span>폐기로 낭비한 <strong>${formatWon(stats.wastedAmount)}</strong>은 ${equivalent} 값이에요. <small>(1잔 ${formatWon(coffeePrice)} 기준)</small></span></p>`;
+}
+
+function clearStatsChart() {
+  spendChart?.destroy();
+  spendChart = null;
+  spendParts = [];
+}
+
+function drawStatsChart() {
+  const canvas = $('#spend-chart');
+  if (!canvas || !window.Chart || spendChart || spendParts.length === 0) return;
+
+  const colors = getComputedStyle(canvas);
+  spendChart = new window.Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: spendParts.map(part => part.label),
+      datasets: [{
+        data: spendParts.map(part => part.amount),
+        backgroundColor: spendParts.map(part => colors.getPropertyValue(`--spend-${part.kind}`).trim()),
+        borderWidth: 0,
+        hoverOffset: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '76%',
+      layout: {padding: 5},
+      animation: matchMedia('(prefers-reduced-motion: reduce)').matches ? false : {duration: 320},
+      plugins: {
+        legend: {display: false},
+        tooltip: {callbacks: {label: ({label, raw}) => `${label} ${formatWon(raw)}`}},
+      },
+    },
+  });
+  canvas.closest('.spend-donut').classList.add('has-chart');
+}
+
+function spendingBreakdown(stats, parts) {
+  const chart = stats.totalSpent > 0
+    ? '<div class="spend-plot"><canvas id="spend-chart" aria-hidden="true"></canvas></div>'
+    : '';
+  const legend = parts.map(part => `<li>
+    <span class="spend-key"><span class="spend-dot ${part.kind}"></span>${part.label}</span>
+    <strong>${formatWon(part.amount)}</strong>
+  </li>`).join('');
+  return `<section class="stats-card">
+    <h2>지출 구성</h2>
+    <div class="spend-overview">
+      <div class="spend-donut">
+        ${chart}
+        <div class="spend-center"><span>총 지출</span><strong>${formatWon(stats.totalSpent)}</strong></div>
+      </div>
+      <ul class="spend-legend" aria-label="상태별 금액">${legend}</ul>
+    </div>
+    <div class="stats-rates">
+      <div><span>소비율</span><strong>${stats.consumptionRate}%</strong><small>${stats.consumedCount}개</small></div>
+      <div><span>폐기율</span><strong>${stats.discardRate}%</strong><small>${stats.discardedCount}개</small></div>
+    </div>
+    <p class="muted stats-note">전체 ${stats.totalCount}개 기준 · 보관 중 ${stats.activeCount}개</p>
+  </section>`;
+}
+
+function wasteRanking(ingredients, monthLabel) {
+  const top = ingredients.filter(item => item.status === 'DISCARDED')
+    .sort((a, b) => b.price - a.price || a.id - b.id)
+    .slice(0, 5);
+  const list = top.length === 0 ? '<p class="stats-empty">이 달에 폐기한 식재료가 없어요.</p>' :
+    `<ol class="waste-ranking">${top.map((item, index) => `<li>
+      <span class="waste-rank" aria-hidden="true">${index + 1}</span>
+      <div class="waste-item"><strong>${html(item.name)}</strong><small>${html(item.storage?.name ?? '구역 없음')}</small></div>
+      <strong class="waste-price">${formatWon(item.price)}</strong>
+    </li>`).join('')}</ol>`;
+  return `<section class="stats-card">
+    <div class="stats-card-title"><h2>${monthLabel} 아까웠던 폐기 식재료</h2><span class="stats-tag">TOP 5</span></div>
+    ${list}
+  </section>`;
+}
+
+function storageBreakdown(ingredients) {
+  const groups = new Map();
+  for (const item of ingredients) {
+    if (!groups.has(item.storageId)) {
+      groups.set(item.storageId, {name: item.storage?.name ?? '구역 없음', spent: 0, discarded: 0});
+    }
+    const group = groups.get(item.storageId);
+    group.spent += item.price;
+    if (item.status === 'DISCARDED') group.discarded++;
+  }
+  const zones = [...groups.values()].sort((a, b) => b.spent - a.spent || a.name.localeCompare(b.name, 'ko'));
+  const totalSpent = zones.reduce((sum, zone) => sum + zone.spent, 0);
+  const totalDiscarded = zones.reduce((sum, zone) => sum + zone.discarded, 0);
+  return `<section class="stats-card stats-storage">
+    <h2>보관 구역별 현황</h2>
+    <p class="muted stats-note">막대는 이 달 전체 지출액과 전체 폐기 건수에서 각 구역이 차지하는 비중이에요.</p>
+    <ul class="storage-list">${zones.map(zone => `<li>
+      <strong class="storage-name">${html(zone.name)}</strong>
+      <div class="storage-bar">
+        <div><span>지출액</span><strong>${formatWon(zone.spent)}</strong></div>
+        <progress aria-hidden="true" max="${Math.max(totalSpent, 1)}" value="${zone.spent}"></progress>
+      </div>
+      <div class="storage-bar waste">
+        <div><span>폐기</span><strong>${won.format(zone.discarded)}건</strong></div>
+        <progress aria-hidden="true" max="${Math.max(totalDiscarded, 1)}" value="${zone.discarded}"></progress>
+      </div>
+    </li>`).join('')}</ul>
+  </section>`;
+}
+
+function renderMonthlyStats(stats, previous, ingredients) {
+  // 서버와 같은 기준으로 구매일 또는 소비기한이 선택한 달인 식재료를 모은다.
+  const monthlyItems = ingredients.filter(item =>
+    item.purchasedAt.slice(0, 7) === stats.month || item.expiresAt.slice(0, 7) === stats.month);
+  const monthLabel = stats.month === monthValue() ? '이번 달' : `${Number(stats.month.slice(5))}월`;
+  spendParts = [
+    {kind: 'consumed', label: '소비 금액', amount: stats.consumedAmount},
+    {kind: 'held', label: '보관 중 금액', amount: stats.totalSpent - stats.consumedAmount - stats.wastedAmount},
+    {kind: 'waste', label: '폐기 금액', amount: stats.wastedAmount},
+  ];
+  $('#report').innerHTML = `
+    ${statsInsight(stats)}
+    <div class="metrics">
+      ${statsMetric('총 지출 금액', stats.totalSpent, 'wallet', statsDelta(stats.totalSpent, previous, 'totalSpent'))}
+      ${statsMetric('소비 금액', stats.consumedAmount, 'utensils')}
+      ${statsMetric('폐기 낭비 금액', stats.wastedAmount, 'trash-2', statsDelta(stats.wastedAmount, previous, 'wastedAmount'))}
+    </div>
+    <div class="stats-details">
+      ${spendingBreakdown(stats, spendParts)}
+      ${wasteRanking(monthlyItems, monthLabel)}
+    </div>
+    ${storageBreakdown(monthlyItems)}`;
+  renderIcons();
+  drawStatsChart();
+}
+
 async function loadStats() {
-  const version = ++statsVersion, month = $('#month').value;
+  const version = ++statsVersion;
+  const month = $('#month').value;
   for (const button of $$('[data-month-offset]')) {
     button.setAttribute('aria-pressed', String(month === monthValue(Number(button.dataset.monthOffset))));
   }
+  clearStatsChart();
   const report = $('#report');
   report.innerHTML = empty(month ? '월별 통계를 불러오는 중이에요.' : '조회할 월을 선택해 주세요.');
   if (!month) return;
-  let s;
+
+  const statsUrl = value => '/ingredients/stats/monthly?' + new URLSearchParams({month: value});
+  const {signal} = session;
   try {
-    s = await api('/ingredients/stats/monthly?' + new URLSearchParams({month}));
+    const [stats, previous, ingredients] = await Promise.all([
+      api(statsUrl(month)),
+      api(statsUrl(previousStatsMonth(month))).catch(err => {
+        if (signal.aborted) throw err;
+        return null;
+      }),
+      api('/ingredients'),
+    ]);
+    if (version !== statsVersion || signal.aborted) return;
+    if (stats.totalCount === 0) {
+      report.innerHTML = empty('이 달에 집계할 식재료가 없어요. 다른 달을 선택해 보세요.');
+      return;
+    }
+    renderMonthlyStats(stats, previous, ingredients);
   } catch (err) {
-    if (version === statsVersion && err.name !== 'AbortError' && !$('#workspace').hidden) {
+    if (version !== statsVersion || err.name === 'AbortError') return;
+    if (!$('#workspace').hidden) {
       report.innerHTML = empty('월별 통계를 불러오지 못했어요. 다시 조회해 주세요.');
     }
     throw err;
   }
-  if (version !== statsVersion) return;
-  if (s.totalCount === 0) {
-    report.innerHTML = empty('이 달에 집계할 식재료가 없어요. 다른 달을 선택해 보세요.');
-    return;
-  }
-  const [year, monthNumber] = s.month.split('-');
-  const bar = (label,percent,count,css) => `<label>${label} ${percent}% · ${count}개<progress class="${css}" max="100" value="${percent}">${percent}%</progress></label>`;
-  report.innerHTML = `<div class="metrics">${metric('총 지출 금액',s.totalSpent,'원','wallet')}${metric('소비 금액',s.consumedAmount,'원','utensils')}${metric('폐기로 낭비한 금액',s.wastedAmount,'원','trash-can')}</div>
-    <div class="panel"><h2>${html(year)}년 ${Number(monthNumber)}월 식재료 처리 현황</h2><p class="muted">전체 ${s.totalCount}개 중 ${s.activeCount}개가 보관 중이에요. 아래 비율은 전체 식재료 개수를 기준으로 계산해요.</p><div class="bars">${bar('소비율',s.consumptionRate,s.consumedCount,'')}${bar('폐기율',s.discardRate,s.discardedCount,'waste')}</div></div>`;
 }
 handle($('#month'),'change',loadStats);
 for (const button of $$('[data-month-offset]')) {
@@ -389,4 +601,7 @@ async function start() {
     if (data) await signedIn(data.user);
   } catch (err) { if ($('#workspace').hidden) signedOut(); showError(err); }
 }
+$('#lucide-cdn').addEventListener('load', renderIcons, {once: true});
+$('#chart-cdn').addEventListener('load', drawStatsChart, {once: true});
+renderIcons();
 start();

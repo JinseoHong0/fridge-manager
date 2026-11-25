@@ -3,87 +3,143 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#F8FAFC">
+  <meta name="theme-color" content="#F9FAFB">
   <title>냉장노트 · 내 냉장고</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
   <link rel="stylesheet" href="/style.css">
+  <script id="lucide-cdn" src="https://unpkg.com/lucide@latest" async></script>
+  <script id="chart-cdn" src="https://cdn.jsdelivr.net/npm/chart.js" async></script>
   <script type="module" src="/app.js"></script>
 </head>
 <body>
-<header><div class="wrap top">
-  <div class="brand"><span class="logo" aria-hidden="true"></span>냉장노트</div>
-  <nav id="navigation" aria-label="주 메뉴" hidden>
-    <button data-view="fridge"><i class="fa-solid fa-box-archive"></i> 내 냉장고</button>
-    <button data-view="recommend"><i class="fa-solid fa-utensils"></i> AI 레시피</button>
-    <button data-view="book"><i class="fa-solid fa-book-open"></i> 레시피북</button>
-    <button data-view="stats"><i class="fa-solid fa-chart-simple"></i> 월별 통계</button>
-  </nav>
-  <div id="account" hidden><span id="username"></span><button id="logout" class="plain">로그아웃</button></div>
-</div></header>
-<main class="wrap">
-  <section id="auth" hidden>
-    <div class="auth-cover">
-      <div class="cover-copy"><span class="cover-mark"><i class="fa-solid fa-seedling"></i> 냉장노트</span>
-        <h1>내 냉장고의<br>식재료 관리</h1>
-        <p>소비기한을 살펴보고,<br>남은 재료로 오늘의 요리를 골라보세요.</p>
+  <header class="site-header">
+    <div class="wrap top">
+      <a class="brand" href="/" aria-label="냉장노트 홈">
+        <span class="logo"><i data-lucide="refrigerator" aria-hidden="true"></i></span>
+        냉장노트
+      </a>
+      <nav id="navigation" aria-label="주 메뉴" hidden>
+        <button type="button" data-view="fridge"><i data-lucide="refrigerator" aria-hidden="true"></i> 내 냉장고</button>
+        <button type="button" data-view="recommend"><i data-lucide="utensils" aria-hidden="true"></i> AI 레시피</button>
+        <button type="button" data-view="book"><i data-lucide="book-open" aria-hidden="true"></i> 레시피북</button>
+        <button type="button" data-view="stats"><i data-lucide="chart-no-axes-column" aria-hidden="true"></i> 월별 통계</button>
+      </nav>
+      <div id="account" hidden>
+        <span id="username"></span>
+        <button id="logout" type="button" class="plain">로그아웃</button>
       </div>
-      <div class="kitchen" aria-hidden="true"><div class="shelf"><b></b><b></b><b></b></div><div class="fridge-art"><div class="freezer"></div><div class="note"><b></b><b></b><b></b></div></div><div class="plant"><b></b></div></div>
     </div>
-    <div class="auth-side">
-      <div class="switch" aria-label="계정 메뉴"><button data-auth="login" aria-pressed="true">로그인</button><button data-auth="register" aria-pressed="false">회원가입</button></div>
-      <h2 id="auth-title">로그인</h2>
-      <form id="auth-form">
-        <label id="name-row" hidden>이름<input name="name" autocomplete="name"></label>
-        <label>이메일<input name="email" type="email" required autocomplete="username" placeholder="name@example.com"></label>
-        <label>비밀번호<input name="password" type="password" required autocomplete="current-password" placeholder="비밀번호 입력"></label>
-        <small id="password-hint" hidden>비밀번호는 8자 이상 입력해 주세요.</small>
-        <p id="auth-error" class="error" role="alert"></p>
-        <button id="auth-submit" class="primary">로그인</button>
-      </form>
-      <div class="divider">또는</div>
-      <button id="demo" class="demo"><i class="fa-solid fa-bolt"></i> 체험 계정 A(a@test.com)로 빠른 로그인</button>
-    </div>
-  </section>
-  <section id="workspace" hidden>
-    <div class="page-head"><div><span class="dateline" id="today"></span><h1 id="title"></h1></div><button id="new-item" class="primary"><i class="fa-solid fa-plus"></i> 식재료 등록</button></div>
-    <section id="fridge" hidden>
-      <div id="summary" class="metrics"></div>
-      <div class="list-panel"><div class="section-head"><h2>식재료 목록 <small id="item-count"></small></h2><button id="manage-zone" class="plain" hidden>선택 구역 관리</button></div>
-        <div class="zones" id="zones" aria-label="보관 구역"></div>
-        <div class="filters"><label>상태<select id="status"><option value="">전체 상태</option><option value="ACTIVE" selected>보관중</option><option value="CONSUMED">소비완료</option><option value="DISCARDED">폐기</option></select></label>
-          <label>위험도<select id="risk"><option value="">전체 위험도</option><option value="IMMINENT">임박</option><option value="EXPIRED">만료</option></select></label>
-          <label class="search">식재료명 검색<input type="search" id="keyword" placeholder="식재료명 입력"></label></div>
+  </header>
+  <main class="wrap">
+    <section id="auth" hidden>
+      <div class="auth-cover">
+        <i data-lucide="refrigerator" aria-hidden="true"></i>
+        <h1>내 냉장고의<br> 식재료 관리</h1>
+        <p>소비기한을 살펴보고,<br> 남은 재료로 오늘의 요리를 골라보세요.</p>
       </div>
-      <div id="items" class="grid"></div>
-    </section>
-    <section id="recommend" hidden>
-      <div class="panel">
-        <h2>추천에 사용할 식재료</h2>
-        <p class="muted">선택하지 않으면 소비기한이 가까운 재료부터 추천해요.</p>
-        <div id="choices" class="choices"></div>
-        <button type="button" id="generate" class="primary" disabled><i class="fa-solid fa-wand-magic-sparkles"></i> 레시피 추천받기</button>
-        <p id="recommend-status" class="muted" role="status"></p>
-      </div>
-      <div id="suggestions" class="grid recipes"></div>
-    </section>
-    <section id="book" hidden><div class="panel"><label>레시피 제목 검색<input type="search" id="book-query" placeholder="요리명 입력"></label></div><div id="saved" class="grid recipes"></div></section>
-    <section id="stats" hidden>
-      <div class="panel">
-        <div class="month">
-          <div class="zones" aria-label="빠른 월 선택">
-            <button type="button" data-month-offset="0" aria-pressed="true">이번 달</button>
-            <button type="button" data-month-offset="-1" aria-pressed="false">지난달</button>
-          </div>
-          <label>조회할 월<input id="month" type="month" required></label>
+      <div class="auth-side">
+        <div class="switch" aria-label="계정 메뉴">
+          <button type="button" data-auth="login" aria-pressed="true">로그인</button>
+          <button type="button" data-auth="register" aria-pressed="false">회원가입</button>
         </div>
-        <p class="muted stats-basis">구매일 또는 소비기한이 선택한 월에 속하는 식재료를 집계합니다.</p>
+        <h2 id="auth-title">로그인</h2>
+        <form id="auth-form">
+          <label id="name-row" hidden>이름<input name="name" autocomplete="name"></label>
+          <label>이메일<input name="email" type="email" required autocomplete="username" placeholder="name@example.com"></label>
+          <label>비밀번호<input name="password" type="password" required autocomplete="current-password" placeholder="비밀번호 입력"></label>
+          <small id="password-hint" hidden>비밀번호는 8자 이상 입력해 주세요.</small>
+          <p id="auth-error" class="error" role="alert"></p>
+          <button id="auth-submit" class="primary">로그인</button>
+        </form>
+        <div class="divider">또는</div>
+        <button id="demo" type="button" class="demo"><i data-lucide="zap" aria-hidden="true"></i> 체험 계정 A(a@test.com)로 빠른 로그인</button>
       </div>
-      <div id="report" aria-live="polite"></div>
     </section>
-  </section>
-  <p id="boot" role="status">냉장노트를 여는 중…</p>
-</main>
-<dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-head"><h2 id="dialog-title"></h2><button type="button" id="close" aria-label="닫기">×</button></div><form id="editor"></form></dialog>
-<div id="toasts" aria-live="polite" aria-atomic="false"></div>
-</body></html>
+
+    <section id="workspace" hidden>
+      <div class="page-head">
+        <div><span class="dateline" id="today"></span><h1 id="title"></h1></div>
+        <button id="new-item" type="button" class="primary"><i data-lucide="plus" aria-hidden="true"></i> 식재료 등록</button>
+      </div>
+      <section id="fridge" aria-label="내 냉장고" hidden>
+        <ul id="summary" class="inventory-summary" aria-label="보관 중인 식재료 요약"></ul>
+        <div class="zone-bar">
+          <div class="zone-tabs" id="zones" aria-label="보관 구역"></div>
+          <div class="zone-actions">
+            <button id="manage-zone" type="button" class="plain" hidden><i data-lucide="settings-2" aria-hidden="true"></i> 구역 관리</button>
+            <button type="button" class="plain add-zone" data-action="add-zone"><i data-lucide="plus" aria-hidden="true"></i> 구역 추가</button>
+          </div>
+        </div>
+        <div class="inventory-tools">
+          <h2>식재료 목록 <small id="item-count"></small></h2>
+          <div class="filters">
+            <label class="search">
+              <i data-lucide="search" aria-hidden="true"></i>
+              <input type="search" id="keyword" aria-label="식재료명 검색" placeholder="식재료 검색">
+            </label>
+            <select id="status" aria-label="처리 상태">
+              <option value="">전체 상태</option>
+              <option value="ACTIVE" selected>보관중</option>
+              <option value="CONSUMED">소비완료</option>
+              <option value="DISCARDED">폐기</option>
+            </select>
+            <select id="risk" aria-label="위험도">
+              <option value="">전체 위험도</option>
+              <option value="IMMINENT">임박</option>
+              <option value="EXPIRED">만료</option>
+            </select>
+          </div>
+        </div>
+        <div id="items" class="grid"></div>
+      </section>
+
+      <section id="recommend" hidden>
+        <div class="recipe-picker">
+          <h2>추천에 사용할 식재료</h2>
+          <p class="muted">선택하지 않으면 소비기한이 가까운 재료부터 추천해요.</p>
+          <div id="choices" class="choices"></div>
+          <button type="button" id="generate" class="primary" disabled>
+            <i data-lucide="sparkles" aria-hidden="true"></i> 레시피 추천받기
+          </button>
+          <p id="recommend-status" class="muted" role="status"></p>
+        </div>
+        <div id="suggestions" class="grid recipes"></div>
+      </section>
+
+      <section id="book" hidden>
+        <div class="book-tools">
+          <label class="search">
+            <i data-lucide="search" aria-hidden="true"></i>
+            <input type="search" id="book-query" aria-label="레시피 제목 검색" placeholder="레시피 제목 검색">
+          </label>
+        </div>
+        <div id="saved" class="grid recipes"></div>
+      </section>
+
+      <section id="stats" hidden>
+        <div class="stats-tools">
+          <div class="month">
+            <div class="switch month-switch" aria-label="빠른 월 선택">
+              <button type="button" data-month-offset="0" aria-pressed="true">이번 달</button>
+              <button type="button" data-month-offset="-1" aria-pressed="false">지난달</button>
+            </div>
+            <label class="month-picker">조회할 월<input id="month" type="month" required></label>
+          </div>
+          <p class="muted stats-basis">구매일 또는 소비기한이 선택한 월에 속하는 식재료를 집계합니다.</p>
+        </div>
+        <div id="report" aria-live="polite"></div>
+      </section>
+    </section>
+    <p id="boot" role="status">냉장노트를 여는 중…</p>
+  </main>
+
+  <dialog id="dialog" aria-labelledby="dialog-title">
+    <div class="dialog-head">
+      <h2 id="dialog-title"></h2>
+      <button type="button" id="close" class="plain" aria-label="닫기"><i data-lucide="x" aria-hidden="true"></i></button>
+    </div>
+    <form id="editor"></form>
+  </dialog>
+  <div id="toasts" aria-live="polite" aria-atomic="false"></div>
+</body>
+</html>
