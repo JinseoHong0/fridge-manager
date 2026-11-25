@@ -232,6 +232,8 @@ handle($('#generate'),'click',async () => {
   const {signal} = session;
   const status = $('#recommend-status');
   status.className = 'muted';
+  suggestions = [];
+  $('#suggestions').replaceChildren();
   status.textContent = '식재료에 맞는 레시피를 준비하고 있어요.';
   recommending = true;
   renderChoices();
@@ -244,8 +246,8 @@ handle($('#generate'),'click',async () => {
     suggestions = result.recommendations;
     renderSuggestions();
     status.textContent = result.source === 'fallback'
-      ? `기본 추천 레시피 ${suggestions.length}개를 표시했어요.`
-      : `맞춤 레시피 ${suggestions.length}개를 찾았어요.`;
+      ? `AI 추천을 이용할 수 없어 선택한 재료에 맞는 기본 레시피 ${suggestions.length}개를 골랐어요.`
+      : `Gemini가 재료에 맞춰 레시피 ${suggestions.length}개를 만들었어요.`;
   } catch (err) {
     if (signal.aborted) throw err;
     status.className = 'error';

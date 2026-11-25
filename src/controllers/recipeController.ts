@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import * as recipeStore from '../stores/recipeStore.js';
 import * as ingredientStore from '../stores/ingredientStore.js';
 import { parseId } from '../utils/parseId.js';
+import { findFallbackRecipes } from '../utils/fallbackRecipes.js';
 import { calculateDday } from '../utils/dday.js';
 
 interface IdParams {
@@ -69,7 +70,14 @@ async function generateAiRecipes(targetNames: string[]): Promise<GeneratedRecipe
   const ai = new GoogleGenAI({ apiKey: config.GEMINI_API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-3.5-flash-lite',
-    contents: `보유 식재료: ${targetNames.join(', ')}. 이 식재료들과 기본 자취방 양념(간장, 설탕, 소금, 식용유, 고추장 등)만 활용해서 15분 이내에 만들 수 있는 현실적인 자취 요리 레시피 2개를 추천해줘.`,
+    contents: [
+      `보유 식재료 목록: ${JSON.stringify(targetNames)}`,
+      '한국어로 1인분 요리 두 가지를 제안하세요. 두 요리는 주된 조리법과 완성된 형태가 달라야 합니다.',
+      '각 요리에 어울리는 재료만 고르세요. 모든 재료를 한 접시에 넣을 필요는 없습니다.',
+      '추가로 쓸 수 있는 것은 물, 소금, 간장, 설탕, 식용유, 고추장뿐입니다. 밥, 면, 달걀, 육수 등은 보유 목록에 있을 때만 쓰세요.',
+      '제목은 통상적인 요리 이름으로 쓰고, usedIngredients에는 실제 쓰는 재료와 양념을, steps에는 분량과 익힘 기준을 적으세요.',
+      '짧게 조리할 수 있는 메뉴를 우선하되 실제 익히는 데 필요한 시간을 cookingTime에 적으세요.',
+    ].join('\n'),
     config: {
       httpOptions: { timeout: 15_000, retryOptions: { attempts: 1 } },
       responseMimeType: 'application/json',
@@ -161,30 +169,13 @@ export const recommend: RequestHandler<{}, unknown, RecommendBody | undefined> =
 
       const source = recipes.length > 0 ? 'ai' : 'fallback';
       if (source === 'fallback') {
-        const mainItem = targetNames[0] ?? '식재료';
-        const subItem = targetNames[1] ?? '대파';
-        recipes = [
-          {
-            title: `초간단 ${mainItem} 간장덮밥`,
-            cookingTime: '10분',
-            usedIngredients: targetNames,
-            steps: [
-              `${mainItem}과(와) ${subItem}을(를) 한 입 크기로 썰어 준비합니다.`,
-              '달군 팬에 식용유를 두르고 중불에서 노릇하게 볶습니다.',
-              '간장 1.5큰술, 설탕 0.5큰술을 넣고 빠르게 졸여 따뜻한 밥 위에 얹어 완성합니다.',
-            ],
-          },
-          {
-            title: `자취방 ${mainItem} 매콤 볶음`,
-            cookingTime: '15분',
-            usedIngredients: targetNames,
-            steps: [
-              `준비한 ${targetNames.join(', ')} 재료를 먹기 좋게 손질합니다.`,
-              '고추장 1큰술, 간장 1큰술, 설탕 0.5큰술로 양념장을 만듭니다.',
-              '팬에 재료를 먼저 볶다가 양념장을 넣고 강불에서 빠르게 볶아 완성합니다.',
-            ],
-          },
-        ];
+        recipes = findFallbackRecipes(targetNames);
+        if (recipes.length === 0) {
+          res.status(503).json({
+            message: '현재 AI 추천을 이용할 수 없고 선택한 재료에 맞는 기본 레시피도 없어요. 다른 재료를 선택하거나 잠시 후 다시 시도해 주세요.',
+          });
+          return;
+        }
       }
 
       const videoCandidates = await Promise.all(
