@@ -168,7 +168,7 @@ async function main() {
       cookingTime: '10분',
       steps: '1. 두부를 한 입 크기로 썰어 물기를 제거합니다.\n2. 팬에 노릇하게 부친 뒤 간장 양념을 넣고 졸입니다.',
       memo: '자취 반찬으로 최고',
-      videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      videoUrl: 'https://www.youtube.com/watch?v=bnhqtin0ymg',
     },
   });
 
