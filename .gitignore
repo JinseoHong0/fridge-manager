@@ -1,0 +1,28 @@
+# 로컬 설정 및 비밀 파일
+.env
+.env.*
+!.env.example
+.envrc
+.npmrc
+.rest-client.env.json
+http-client.private.env.json
+*.pem
+*.key
+*.p12
+/.aws/
+
+# 의존성 및 생성물
+node_modules/
+/dist/
+/src/generated/
+/coverage/
+*.tsbuildinfo
+
+# 로컬 작업 환경과 제출 압축본
+.DS_Store
+*.log
+/.agents/
+/.codex/
+/.vscode/
+/.idea/
+/*.zip

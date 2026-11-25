@@ -1,0 +1,38 @@
+{
+  "name": "fridge-manager",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/app.ts",
+    "check": "tsc --noEmit",
+    "build": "tsc",
+    "start": "node --env-file=.env dist/app.js",
+    "reset": "npx prisma migrate reset --force && npx prisma db seed"
+  },
+  "type": "module",
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.3.0",
+    "express-session": "^1.19.0",
+    "passport": "^0.7.0",
+    "passport-local": "^1.0.0",
+    "pg": "^8.23.1",
+    "yt-search": "^2.11.1"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/express-session": "^1.19.0",
+    "@types/node": "^26.6.5",
+    "@types/passport": "^1.0.17",
+    "@types/passport-local": "^1.0.38",
+    "@types/pg": "^8.23.1",
+    "prisma": "^7.10.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

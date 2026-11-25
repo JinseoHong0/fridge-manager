@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 1. 사용자 (User)
+model User {
+  id           Int           @id @default(autoincrement())
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  name         String
+  createdAt    DateTime      @default(now()) @map("created_at")
+  storages     Storage[]     // 1:N — 사용자가 등록한 보관 구역 목록
+  ingredients  Ingredient[]  // 1:N — 사용자가 등록한 식재료 목록
+  savedRecipes SavedRecipe[] // 1:N — 사용자가 저장한 AI 레시피 목록
+
+  @@map("users")
+}
+
+// 2. 보관 구역 (Storage)
+model Storage {
+  id          Int          @id @default(autoincrement())
+  name        String
+  tempInfo    String       @default("") @map("temp_info")
+  sortOrder   Int          @default(1) @map("sort_order")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  userId      Int          @map("user_id")
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ingredients Ingredient[] // 1:N — 이 보관 구역에 속한 식재료 목록
+
+  @@map("storages")
+}
+
+// 3. 식재료 (Ingredient)
+model Ingredient {
+  id          Int      @id @default(autoincrement())
+  name        String
+  purchasedAt DateTime @map("purchased_at")
+  expiresAt   DateTime @map("expires_at")
+  price       Int      @default(0)
+  memo        String   @default("")
+  status      String   @default("ACTIVE") // ACTIVE(보관중) | CONSUMED(소비완료) | DISCARDED(폐기)
+  createdAt   DateTime @default(now()) @map("created_at")
+  userId      Int      @map("user_id")
+  storageId   Int      @map("storage_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storage     Storage  @relation(fields: [storageId], references: [id], onDelete: Cascade)
+
+  @@map("ingredients")
+}
+
+// 4. 저장한 AI 레시피 (SavedRecipe)
+model SavedRecipe {
+  id              Int      @id @default(autoincrement())
+  title           String
+  usedIngredients String   @map("used_ingredients")
+  cookingTime     String   @map("cooking_time")
+  steps           String
+  memo            String   @default("")
+  videoUrl        String   @default("") @map("video_url")
+  createdAt       DateTime @default(now()) @map("created_at")
+  userId          Int      @map("user_id")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("saved_recipes")
+}
